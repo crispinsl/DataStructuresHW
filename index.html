@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Task Manager</title>
+  <title>Task Manager Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .task-item.dragging {
@@ -27,7 +27,7 @@
   <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
   <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
-    <h1 class="text-2xl font-bold text-center mb-6">Task Manager</h1>
+    <h1 class="text-2xl font-bold text-center mb-6">Task Manager Pro</h1>
     
     <!-- Task Form -->
     <form id="task-form" class="flex gap-2 mb-6 flex-wrap">
@@ -36,22 +36,26 @@
         id="task-name" 
         placeholder="Task name" 
         required
-        class="flex-1 p-2 border border-gray-300 rounded"
+        class="flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        autofocus
       >
-      <select id="task-priority" class="p-2 border border-gray-300 rounded">
+      <select 
+        id="task-priority" 
+        class="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      >
         <option value="low">Low</option>
-        <option value="medium">Medium</option>
+        <option value="medium" selected>Medium</option>
         <option value="high">High</option>
       </select>
       <input 
         type="date" 
         id="task-due" 
         required
-        class="p-2 border border-gray-300 rounded"
+        class="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       >
       <button 
         type="submit" 
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
       >
         Add Task
       </button>
@@ -59,151 +63,175 @@
 
     <!-- Action Buttons -->
     <div class="flex gap-2 mb-6 flex-wrap">
-      <button id="sort-priority" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+      <button id="sort-priority" class="action-btn bg-blue-600">
         Sort by Priority
       </button>
-      <button id="sort-date" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+      <button id="sort-date" class="action-btn bg-blue-600">
         Sort by Date
       </button>
-      <button id="sort-name" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+      <button id="sort-name" class="action-btn bg-blue-600">
         Sort by Name
       </button>
-      <button id="undo-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+      <button id="undo-btn" class="action-btn bg-gray-600" title="Ctrl+Z">
         Undo
       </button>
-      <button id="redo-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+      <button id="redo-btn" class="action-btn bg-gray-600" title="Ctrl+Y">
         Redo
       </button>
     </div>
 
     <!-- Task List -->
     <ul id="task-list" class="space-y-2"></ul>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="text-center py-8 text-gray-500 hidden">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+      <p>No tasks yet. Add one above!</p>
+    </div>
   </div>
 
   <script>
-    // Data Structure
-    let tasks = JSON.parse(localStorage.getItem("tasks")) || [
-      { id: 1, name: "Finish project", priority: "high", dueDate: "2023-12-01" },
-      { id: 2, name: "Buy groceries", priority: "medium", dueDate: "2023-11-25" },
-      { id: 3, name: "Call mom", priority: "low", dueDate: "2023-11-20" }
-    ];
+    // ====================
+    // STATE MANAGEMENT
+    // ====================
+    const state = {
+      tasks: JSON.parse(localStorage.getItem("tasks")) || [
+        { id: 1, name: "Finish project", priority: "high", dueDate: "2023-12-01" },
+        { id: 2, name: "Buy groceries", priority: "medium", dueDate: "2023-11-25" },
+        { id: 3, name: "Call mom", priority: "low", dueDate: "2023-11-20" }
+      ],
+      history: [],
+      future: [],
+      MAX_HISTORY: 20
+    };
 
-    // Undo/Redo System
-    let history = [];
-    let future = []; // For redo functionality
-    const MAX_HISTORY = 20;
+    // ====================
+    // CORE FUNCTIONS
+    // ====================
+    const saveTasks = () => {
+      localStorage.setItem("tasks", JSON.stringify(state.tasks));
+    };
 
-    function saveSnapshot() {
-      history.push(JSON.stringify(tasks));
-      future = []; // Clear redo stack on new action
-      if (history.length > MAX_HISTORY) history.shift();
-    }
+    const saveSnapshot = () => {
+      state.history.push(JSON.stringify(state.tasks));
+      state.future = []; // Clear redo stack on new action
+      if (state.history.length > state.MAX_HISTORY) state.history.shift();
+    };
 
-    function undo() {
-      if (history.length > 1) {
-        future.push(history.pop());
-        tasks = JSON.parse(history[history.length - 1]);
+    const undo = () => {
+      if (state.history.length > 1) {
+        state.future.push(state.history.pop());
+        state.tasks = JSON.parse(state.history[state.history.length - 1]);
         saveTasks();
         renderTasks();
         showToast("Undo successful");
       } else {
         showToast("Nothing to undo", "bg-red-500");
       }
-    }
+    };
 
-    function redo() {
-      if (future.length > 0) {
-        const nextState = future.pop();
-        history.push(nextState);
-        tasks = JSON.parse(nextState);
+    const redo = () => {
+      if (state.future.length > 0) {
+        const nextState = state.future.pop();
+        state.history.push(nextState);
+        state.tasks = JSON.parse(nextState);
         saveTasks();
         renderTasks();
         showToast("Redo successful");
       } else {
         showToast("Nothing to redo", "bg-red-500");
       }
-    }
+    };
 
-    // Toast Notifications
-    function showToast(message, bgColor = "bg-green-500") {
+    // ====================
+    // UI FUNCTIONS
+    // ====================
+    const showToast = (message, bgColor = "bg-green-500") => {
       const toast = document.createElement("div");
-      toast.className = `toast ${bgColor} text-white px-4 py-2 rounded shadow-lg`;
-      toast.textContent = message;
+      toast.className = `toast ${bgColor} text-white px-4 py-2 rounded shadow-lg flex items-center`;
+      toast.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+        </svg>
+        ${message}
+      `;
       document.getElementById("toast-container").appendChild(toast);
       setTimeout(() => toast.remove(), 3000);
-    }
+    };
 
-    // Initialize
-    saveSnapshot();
-
-    // DOM Elements
-    const taskForm = document.getElementById("task-form");
-    const taskList = document.getElementById("task-list");
-
-    function saveTasks() {
-      localStorage.setItem("tasks", JSON.stringify(tasks));
-    }
-
-    function renderTasks() {
+    const renderTasks = () => {
+      const taskList = document.getElementById("task-list");
+      const emptyState = document.getElementById("empty-state");
+      
       taskList.innerHTML = "";
-      tasks.forEach(task => {
-        const li = document.createElement("li");
-        li.className = "task-item p-3 border border-gray-200 rounded flex justify-between items-center";
-        li.setAttribute("data-id", task.id);
-        li.setAttribute("draggable", "true");
-        
+      
+      if (state.tasks.length === 0) {
+        emptyState.classList.remove("hidden");
+        return;
+      }
+      
+      emptyState.classList.add("hidden");
+
+      state.tasks.forEach(task => {
         const priorityColors = {
           high: "text-red-600 font-bold",
           medium: "text-orange-500 font-bold",
           low: "text-green-600 font-bold"
         };
 
-        li.innerHTML = `
-          <div class="flex items-center gap-4">
-            <span class="name">${task.name}</span>
+        const taskItem = document.createElement("li");
+        taskItem.className = "task-item p-3 border border-gray-200 rounded flex justify-between items-center bg-white hover:shadow-sm transition-shadow";
+        taskItem.setAttribute("data-id", task.id);
+        taskItem.setAttribute("draggable", "true");
+        taskItem.innerHTML = `
+          <div class="flex items-center gap-4 flex-wrap">
+            <span class="name font-medium">${task.name}</span>
             <span class="${priorityColors[task.priority]}">${task.priority}</span>
-            <span class="text-gray-500">Due: ${task.dueDate}</span>
+            <span class="text-gray-500 text-sm">${formatDate(task.dueDate)}</span>
           </div>
           <button 
-            class="delete-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+            class="delete-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded transition-colors"
             data-id="${task.id}"
+            aria-label="Delete task"
           >
             Delete
           </button>
         `;
-        taskList.appendChild(li);
+        taskList.appendChild(taskItem);
 
-        li.addEventListener("dblclick", () => enableEditMode(li, task));
+        // Edit on double-click
+        taskItem.addEventListener("dblclick", () => enableEditMode(taskItem, task));
       });
 
-      document.querySelectorAll(".delete-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const taskId = parseInt(e.target.getAttribute("data-id"));
-          const taskName = tasks.find(t => t.id === taskId)?.name || "Task";
-          tasks = tasks.filter(task => task.id !== taskId);
-          saveTasks();
-          renderTasks();
-          showToast(`Deleted: ${taskName}`, "bg-red-500");
-        });
-      });
-
+      setupEventListeners();
       setupDragAndDrop();
-      saveSnapshot(); // Save state after rendering
-    }
+      saveSnapshot();
+    };
 
-    // Edit Task
-    function enableEditMode(li, task) {
+    const formatDate = (dateString) => {
+      const options = { year: 'numeric', month: 'short', day: 'numeric' };
+      return new Date(dateString).toLocaleDateString(undefined, options);
+    };
+
+    // ====================
+    // TASK OPERATIONS
+    // ====================
+    const enableEditMode = (li, task) => {
       li.classList.add("editing");
       li.innerHTML = `
-        <div class="flex items-center gap-2 w-full">
+        <div class="flex items-center gap-2 w-full flex-wrap">
           <input 
-            class="edit-input p-1 border border-gray-300 rounded flex-1" 
+            class="edit-input p-2 border border-gray-300 rounded flex-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
             value="${task.name}" 
             data-field="name"
+            aria-label="Task name"
           >
           <select 
-            class="edit-input p-1 border border-gray-300 rounded" 
+            class="edit-input p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
             data-field="priority"
+            aria-label="Task priority"
           >
             <option value="low" ${task.priority === "low" ? "selected" : ""}>Low</option>
             <option value="medium" ${task.priority === "medium" ? "selected" : ""}>Medium</option>
@@ -211,37 +239,51 @@
           </select>
           <input 
             type="date" 
-            class="edit-input p-1 border border-gray-300 rounded" 
+            class="edit-input p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
             value="${task.dueDate}" 
             data-field="dueDate"
+            aria-label="Due date"
           >
-          <button 
-            class="save-edit bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded"
-          >
-            Save
-          </button>
+          <div class="flex gap-2">
+            <button 
+              class="save-edit bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded transition-colors"
+              type="button"
+            >
+              Save
+            </button>
+            <button 
+              class="cancel-edit bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded transition-colors"
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       `;
 
-      li.querySelector(".save-edit").addEventListener("click", () => saveEdit(li, task));
+      const saveEdit = () => {
+        li.querySelectorAll(".edit-input").forEach(input => {
+          task[input.getAttribute("data-field")] = input.value;
+        });
+        saveTasks();
+        renderTasks();
+        showToast("Task updated");
+      };
+
+      li.querySelector(".save-edit").addEventListener("click", saveEdit);
+      li.querySelector(".cancel-edit").addEventListener("click", renderTasks);
+      
       li.querySelectorAll(".edit-input").forEach(input => {
         input.addEventListener("keypress", (e) => {
-          if (e.key === "Enter") saveEdit(li, task);
+          if (e.key === "Enter") saveEdit();
         });
       });
-    }
+    };
 
-    function saveEdit(li, task) {
-      li.querySelectorAll(".edit-input").forEach(input => {
-        task[input.getAttribute("data-field")] = input.value;
-      });
-      saveTasks();
-      renderTasks();
-      showToast("Task updated");
-    }
-
-    // Drag-and-Drop
-    function setupDragAndDrop() {
+    // ====================
+    // DRAG AND DROP
+    // ====================
+    const setupDragAndDrop = () => {
       let draggedItem = null;
 
       document.querySelectorAll(".task-item").forEach(item => {
@@ -255,6 +297,8 @@
         });
       });
 
+      const taskList = document.getElementById("task-list");
+      
       taskList.addEventListener("dragover", (e) => {
         e.preventDefault();
         const afterElement = getDragAfterElement(taskList, e.clientY);
@@ -269,15 +313,15 @@
         const newTasks = [];
         document.querySelectorAll(".task-item").forEach(item => {
           const id = parseInt(item.getAttribute("data-id"));
-          newTasks.push(tasks.find(t => t.id === id));
+          newTasks.push(state.tasks.find(t => t.id === id));
         });
-        tasks = newTasks;
+        state.tasks = newTasks;
         saveTasks();
         showToast("Tasks reordered");
       });
-    }
+    };
 
-    function getDragAfterElement(container, y) {
+    const getDragAfterElement = (container, y) => {
       const draggableElements = [...container.querySelectorAll(".task-item:not(.dragging)")];
       return draggableElements.reduce((closest, child) => {
         const box = child.getBoundingClientRect();
@@ -288,50 +332,107 @@
           return closest;
         }
       }, { offset: Number.NEGATIVE_INFINITY }).element;
-    }
+    };
 
-    // Event Listeners
-    taskForm.addEventListener("submit", (e) => {
+    // ====================
+    // EVENT LISTENERS
+    // ====================
+    const setupEventListeners = () => {
+      // Delete buttons
+      document.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const taskId = parseInt(e.target.getAttribute("data-id"));
+          const taskName = state.tasks.find(t => t.id === taskId)?.name || "Task";
+          state.tasks = state.tasks.filter(task => task.id !== taskId);
+          saveTasks();
+          renderTasks();
+          showToast(`Deleted: ${taskName}`, "bg-red-500");
+        });
+      });
+    };
+
+    // Form submission
+    document.getElementById("task-form").addEventListener("submit", (e) => {
       e.preventDefault();
       const newTask = {
         id: Date.now(),
-        name: document.getElementById("task-name").value,
+        name: document.getElementById("task-name").value.trim(),
         priority: document.getElementById("task-priority").value,
         dueDate: document.getElementById("task-due").value
       };
-      tasks.push(newTask);
+      
+      if (!newTask.name) {
+        showToast("Task name cannot be empty", "bg-red-500");
+        return;
+      }
+      
+      state.tasks.push(newTask);
       saveTasks();
       renderTasks();
-      taskForm.reset();
-      showToast("Task added");
+      document.getElementById("task-form").reset();
+      document.getElementById("task-name").focus();
+      showToast("Task added successfully");
     });
 
+    // Sorting
     document.getElementById("sort-priority").addEventListener("click", () => {
       const priorityOrder = { high: 3, medium: 2, low: 1 };
-      tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+      state.tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
       saveTasks();
       renderTasks();
       showToast("Sorted by priority");
     });
 
     document.getElementById("sort-date").addEventListener("click", () => {
-      tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+      state.tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
       saveTasks();
       renderTasks();
       showToast("Sorted by date");
     });
 
     document.getElementById("sort-name").addEventListener("click", () => {
-      tasks.sort((a, b) => a.name.localeCompare(b.name));
+      state.tasks.sort((a, b) => a.name.localeCompare(b.name));
       saveTasks();
       renderTasks();
       showToast("Sorted by name");
     });
 
+    // Undo/Redo
     document.getElementById("undo-btn").addEventListener("click", undo);
     document.getElementById("redo-btn").addEventListener("click", redo);
 
-    // Initial render
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key === "z") {
+        e.preventDefault();
+        undo();
+      }
+      if (e.ctrlKey && e.key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    });
+
+    // ====================
+    // INITIALIZATION
+    // ====================
+    // Add button styling
+    const actionBtns = document.querySelectorAll(".action-btn");
+    actionBtns.forEach(btn => {
+      btn.classList.add(
+        "hover:opacity-90", 
+        "text-white", 
+        "px-4", 
+        "py-2", 
+        "rounded", 
+        "transition-all",
+        "transform",
+        "hover:scale-105"
+      );
+    });
+
+    // Initialize
+    saveSnapshot();
     renderTasks();
   </script>
 </body>

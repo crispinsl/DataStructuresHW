@@ -1,156 +1,219 @@
-// Data Structure: Array of tasks (loaded from localStorage)
-let tasks = JSON.parse(localStorage.getItem("tasks")) || [
+// ====================
+// STATE MANAGEMENT
+// ====================
+const taskManager = {
+  tasks: JSON.parse(localStorage.getItem("tasks")) || [
     { id: 1, name: "Finish project", priority: "high", dueDate: "2023-12-01" },
     { id: 2, name: "Buy groceries", priority: "medium", dueDate: "2023-11-25" },
     { id: 3, name: "Call mom", priority: "low", dueDate: "2023-11-20" }
-  ];
+  ],
+  history: [],
+  future: [],
+  MAX_HISTORY: 20,
+  
+  // Initialize the app
+  init() {
+    this.saveSnapshot();
+    this.setupEventListeners();
+    this.renderTasks();
+  },
 
-  let history = [];
-    const MAX_HISTORY = 20;
+  // ====================
+  // CORE FUNCTIONS
+  // ====================
+  saveTasks() {
+    localStorage.setItem("tasks", JSON.stringify(this.tasks));
+  },
 
-    // Save current state to history
-    function saveSnapshot() {
-        history.push(JSON.stringify(tasks));
-        if (history.length > MAX_HISTORY) history.shift(); // Remove oldest
+  saveSnapshot() {
+    this.history.push(JSON.stringify(this.tasks));
+    this.future = [];
+    if (this.history.length > this.MAX_HISTORY) this.history.shift();
+  },
+
+  // ====================
+  // UNDO/REDO SYSTEM
+  // ====================
+  undo() {
+    if (this.history.length > 1) {
+      this.future.push(this.history.pop());
+      this.tasks = JSON.parse(this.history[this.history.length - 1]);
+      this.saveTasks();
+      this.renderTasks();
+      this.showToast("Undo successful");
+    } else {
+      this.showToast("Nothing to undo", "bg-red-500");
     }
+  },
 
-    // Undo last action
-    function undo() {
-        if (history.length > 1) { // Skip if only 1 snapshot exists
-        history.pop(); // Remove current state
-        tasks = JSON.parse(history[history.length - 1]); // Restore previous
-        saveTasks();
-        renderTasks();
-        }
+  redo() {
+    if (this.future.length > 0) {
+      const nextState = this.future.pop();
+      this.history.push(nextState);
+      this.tasks = JSON.parse(nextState);
+      this.saveTasks();
+      this.renderTasks();
+      this.showToast("Redo successful");
+    } else {
+      this.showToast("Nothing to redo", "bg-red-500");
     }
-  
-    saveSnapshot();
+  },
 
-  // DOM Elements
-  const taskForm = document.getElementById("task-form");
-  const taskList = document.getElementById("task-list");
-  
-  // Save tasks to localStorage
-  function saveTasks() {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }
-  
-  // Render tasks with drag-and-drop and edit support
-  function renderTasks() {
+  // ====================
+  // UI FUNCTIONS
+  // ====================
+  showToast(message, bgColor = "bg-green-500") {
+    const toast = document.createElement("div");
+    toast.className = `toast ${bgColor} text-white px-4 py-2 rounded shadow-lg`;
+    toast.textContent = message;
+    document.getElementById("toast-container").appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  },
+
+  renderTasks() {
+    const taskList = document.getElementById("task-list");
+    const emptyState = document.getElementById("empty-state");
+    
     taskList.innerHTML = "";
-    tasks.forEach(task => {
-      const li = document.createElement("li");
-      li.className = "task-item";
-      li.setAttribute("data-id", task.id);
-      li.setAttribute("draggable", "true");
-      li.innerHTML = `
-        <div>
+    
+    if (this.tasks.length === 0) {
+      emptyState.classList.remove("hidden");
+      return;
+    }
+    
+    emptyState.classList.add("hidden");
+
+    this.tasks.forEach(task => {
+      const priorityColors = {
+        high: "text-red-600 font-bold",
+        medium: "text-orange-500 font-bold",
+        low: "text-green-600 font-bold"
+      };
+
+      const taskItem = document.createElement("li");
+      taskItem.className = "task-item p-3 border border-gray-200 rounded flex justify-between items-center";
+      taskItem.setAttribute("data-id", task.id);
+      taskItem.setAttribute("draggable", "true");
+      taskItem.innerHTML = `
+        <div class="flex items-center gap-4">
           <span class="name">${task.name}</span>
-          <span class="priority ${task.priority}">${task.priority}</span>
-          <span class="due-date">Due: ${task.dueDate}</span>
+          <span class="${priorityColors[task.priority]}">${task.priority}</span>
+          <span class="text-gray-500">Due: ${this.formatDate(task.dueDate)}</span>
         </div>
-        <button class="delete-btn" data-id="${task.id}">Delete</button>
+        <button 
+          class="delete-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+          data-id="${task.id}"
+        >
+          Delete
+        </button>
       `;
-      taskList.appendChild(li);
-  
-      // Double-click to edit
-      li.addEventListener("dblclick", () => enableEditMode(li, task));
+      taskList.appendChild(taskItem);
+
+      taskItem.addEventListener("dblclick", () => this.enableEditMode(taskItem, task));
     });
-  
-    // Add delete event listeners
-    document.querySelectorAll(".delete-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        tasks = tasks.filter(task => task.id !== parseInt(e.target.getAttribute("data-id")));
-        saveTasks();
-        renderTasks();
-      });
-    });
-  
-    // Drag-and-drop setup
-    setupDragAndDrop();
-    saveSnapshot();
-  }
-  
-  // Edit Task: Enable edit mode
-  function enableEditMode(li, task) {
+
+    this.setupDragAndDrop();
+    this.saveSnapshot();
+  },
+
+  formatDate(dateString) {
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  },
+
+  // ====================
+  // TASK OPERATIONS
+  // ====================
+  enableEditMode(li, task) {
     li.classList.add("editing");
-    const nameSpan = li.querySelector(".name");
-    const prioritySpan = li.querySelector(".priority");
-    const dueDateSpan = li.querySelector(".due-date");
-  
-    // Replace spans with input fields
-    nameSpan.outerHTML = `<input class="edit-input" value="${task.name}" data-field="name">`;
-    prioritySpan.outerHTML = `
-      <select class="edit-input" data-field="priority">
-        <option value="low" ${task.priority === "low" ? "selected" : ""}>Low</option>
-        <option value="medium" ${task.priority === "medium" ? "selected" : ""}>Medium</option>
-        <option value="high" ${task.priority === "high" ? "selected" : ""}>High</option>
-      </select>
+    li.innerHTML = `
+      <div class="flex items-center gap-2 w-full">
+        <input 
+          class="edit-input p-1 border border-gray-300 rounded flex-1" 
+          value="${task.name}" 
+          data-field="name"
+        >
+        <select 
+          class="edit-input p-1 border border-gray-300 rounded" 
+          data-field="priority"
+        >
+          <option value="low" ${task.priority === "low" ? "selected" : ""}>Low</option>
+          <option value="medium" ${task.priority === "medium" ? "selected" : ""}>Medium</option>
+          <option value="high" ${task.priority === "high" ? "selected" : ""}>High</option>
+        </select>
+        <input 
+          type="date" 
+          class="edit-input p-1 border border-gray-300 rounded" 
+          value="${task.dueDate}" 
+          data-field="dueDate"
+        >
+        <button 
+          class="save-edit bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded"
+        >
+          Save
+        </button>
+      </div>
     `;
-    dueDateSpan.outerHTML = `<input type="date" class="edit-input" value="${task.dueDate}" data-field="dueDate">`;
-  
-    // Save on Enter/Blur
-    const inputs = li.querySelectorAll(".edit-input");
-    inputs.forEach(input => {
-      input.addEventListener("blur", () => saveEdit(li, task));
+
+    li.querySelector(".save-edit").addEventListener("click", () => this.saveEdit(li, task));
+    li.querySelectorAll(".edit-input").forEach(input => {
       input.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") saveEdit(li, task);
+        if (e.key === "Enter") this.saveEdit(li, task);
       });
     });
-    saveSnapshot();
-  }
-  
-  // Edit Task: Save changes
-  function saveEdit(li, task) {
-    const inputs = li.querySelectorAll(".edit-input");
-    inputs.forEach(input => {
+  },
+
+  saveEdit(li, task) {
+    li.querySelectorAll(".edit-input").forEach(input => {
       task[input.getAttribute("data-field")] = input.value;
     });
-    saveTasks();
-    renderTasks();
-  }
-  
-  // Drag-and-drop functionality
-  function setupDragAndDrop() {
-    const items = document.querySelectorAll(".task-item");
+    this.saveTasks();
+    this.renderTasks();
+    this.showToast("Task updated");
+  },
+
+  // ====================
+  // DRAG AND DROP
+  // ====================
+  setupDragAndDrop() {
     let draggedItem = null;
-  
-    items.forEach(item => {
+
+    document.querySelectorAll(".task-item").forEach(item => {
       item.addEventListener("dragstart", () => {
         draggedItem = item;
         setTimeout(() => item.classList.add("dragging"), 0);
       });
-  
+
       item.addEventListener("dragend", () => {
         item.classList.remove("dragging");
       });
     });
-  
+
+    const taskList = document.getElementById("task-list");
+    
     taskList.addEventListener("dragover", (e) => {
       e.preventDefault();
-      const afterElement = getDragAfterElement(taskList, e.clientY);
+      const afterElement = this.getDragAfterElement(taskList, e.clientY);
       if (afterElement == null) {
         taskList.appendChild(draggedItem);
       } else {
         taskList.insertBefore(draggedItem, afterElement);
       }
     });
-  
+
     taskList.addEventListener("drop", () => {
-      // Update tasks array based on new order
       const newTasks = [];
       document.querySelectorAll(".task-item").forEach(item => {
         const id = parseInt(item.getAttribute("data-id"));
-        const task = tasks.find(t => t.id === id);
-        newTasks.push(task);
+        newTasks.push(this.tasks.find(t => t.id === id));
       });
-      tasks = newTasks;
-      saveTasks();
+      this.tasks = newTasks;
+      this.saveTasks();
+      this.showToast("Tasks reordered");
     });
-  }
-  
-  // Helper for drag-and-drop positioning
-  function getDragAfterElement(container, y) {
+  },
+
+  getDragAfterElement(container, y) {
     const draggableElements = [...container.querySelectorAll(".task-item:not(.dragging)")];
     return draggableElements.reduce((closest, child) => {
       const box = child.getBoundingClientRect();
@@ -161,44 +224,99 @@ let tasks = JSON.parse(localStorage.getItem("tasks")) || [
         return closest;
       }
     }, { offset: Number.NEGATIVE_INFINITY }).element;
-  }
-  
-  // Add a new task
-  taskForm.addEventListener("submit", (e) => {
+  },
+
+  // ====================
+  // EVENT HANDLERS
+  // ====================
+  handleTaskSubmit(e) {
     e.preventDefault();
     const newTask = {
       id: Date.now(),
-      name: document.getElementById("task-name").value,
+      name: document.getElementById("task-name").value.trim(),
       priority: document.getElementById("task-priority").value,
       dueDate: document.getElementById("task-due").value
     };
-    tasks.push(newTask);
-    saveTasks();
-    renderTasks();
-    taskForm.reset();
-  });
-  
-  // Sorting Algorithms (unchanged)
-  document.getElementById("sort-priority").addEventListener("click", () => {
-    const priorityOrder = { high: 3, medium: 2, low: 1 };
-    tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
-    saveTasks();
-    renderTasks();
-  });
-  
-  document.getElementById("sort-date").addEventListener("click", () => {
-    tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-    saveTasks();
-    renderTasks();
-  });
-  
-  document.getElementById("sort-name").addEventListener("click", () => {
-    tasks.sort((a, b) => a.name.localeCompare(b.name));
-    saveTasks();
-    renderTasks();
-  });
+    
+    if (!newTask.name) {
+      this.showToast("Task name cannot be empty", "bg-red-500");
+      return;
+    }
+    
+    this.tasks.push(newTask);
+    this.saveTasks();
+    this.renderTasks();
+    document.getElementById("task-form").reset();
+    this.showToast("Task added");
+  },
 
-  document.getElementById("undo-btn").addEventListener("click", undo);
-  
-  // Initial render
-  renderTasks();
+  handleDeleteClick(e) {
+    const taskId = parseInt(e.target.getAttribute("data-id"));
+    const taskName = this.tasks.find(t => t.id === taskId)?.name || "Task";
+    this.tasks = this.tasks.filter(task => task.id !== taskId);
+    this.saveTasks();
+    this.renderTasks();
+    this.showToast(`Deleted: ${taskName}`, "bg-red-500");
+  },
+
+  handleSortPriority() {
+    const priorityOrder = { high: 3, medium: 2, low: 1 };
+    this.tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+    this.saveTasks();
+    this.renderTasks();
+    this.showToast("Sorted by priority");
+  },
+
+  handleSortDate() {
+    this.tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    this.saveTasks();
+    this.renderTasks();
+    this.showToast("Sorted by date");
+  },
+
+  handleSortName() {
+    this.tasks.sort((a, b) => a.name.localeCompare(b.name));
+    this.saveTasks();
+    this.renderTasks();
+    this.showToast("Sorted by name");
+  },
+
+  // ====================
+  // EVENT LISTENERS
+  // ====================
+  setupEventListeners() {
+    // Form submission
+    document.getElementById("task-form").addEventListener("submit", (e) => this.handleTaskSubmit(e));
+    
+    // Delete buttons
+    document.addEventListener("click", (e) => {
+      if (e.target.classList.contains("delete-btn")) {
+        this.handleDeleteClick(e);
+      }
+    });
+
+    // Sorting
+    document.getElementById("sort-priority").addEventListener("click", () => this.handleSortPriority());
+    document.getElementById("sort-date").addEventListener("click", () => this.handleSortDate());
+    document.getElementById("sort-name").addEventListener("click", () => this.handleSortName());
+
+    // Undo/Redo
+    document.getElementById("undo-btn").addEventListener("click", () => this.undo());
+    document.getElementById("redo-btn").addEventListener("click", () => this.redo());
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key === "z") {
+        e.preventDefault();
+        this.undo();
+      }
+      if (e.ctrlKey && e.key === "y") {
+        e.preventDefault();
+        this.redo();
+      }
+    });
+  }
+};
+
+// Initialize the app
+taskManager.init();
