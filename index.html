@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .task-item.dragging {
+      opacity: 0.5;
+      background-color: #f3f4f6;
+    }
+    .task-item.editing {
+      background-color: #fef9c3;
+    }
+    .toast {
+      animation: fadeInOut 3s ease-in-out forwards;
+    }
+    @keyframes fadeInOut {
+      0%, 100% { opacity: 0; transform: translateY(20px); }
+      10%, 90% { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+  <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+    <h1 class="text-2xl font-bold text-center mb-6">Task Manager</h1>
+    
+    <!-- Task Form -->
+    <form id="task-form" class="flex gap-2 mb-6 flex-wrap">
+      <input 
+        type="text" 
+        id="task-name" 
+        placeholder="Task name" 
+        required
+        class="flex-1 p-2 border border-gray-300 rounded"
+      >
+      <select id="task-priority" class="p-2 border border-gray-300 rounded">
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+      <input 
+        type="date" 
+        id="task-due" 
+        required
+        class="p-2 border border-gray-300 rounded"
+      >
+      <button 
+        type="submit" 
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+      >
+        Add Task
+      </button>
+    </form>
+
+    <!-- Action Buttons -->
+    <div class="flex gap-2 mb-6 flex-wrap">
+      <button id="sort-priority" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+        Sort by Priority
+      </button>
+      <button id="sort-date" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+        Sort by Date
+      </button>
+      <button id="sort-name" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+        Sort by Name
+      </button>
+      <button id="undo-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+        Undo
+      </button>
+      <button id="redo-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+        Redo
+      </button>
+    </div>
+
+    <!-- Task List -->
+    <ul id="task-list" class="space-y-2"></ul>
+  </div>
+
+  <script>
+    // Data Structure
+    let tasks = JSON.parse(localStorage.getItem("tasks")) || [
+      { id: 1, name: "Finish project", priority: "high", dueDate: "2023-12-01" },
+      { id: 2, name: "Buy groceries", priority: "medium", dueDate: "2023-11-25" },
+      { id: 3, name: "Call mom", priority: "low", dueDate: "2023-11-20" }
+    ];
+
+    // Undo/Redo System
+    let history = [];
+    let future = []; // For redo functionality
+    const MAX_HISTORY = 20;
+
+    function saveSnapshot() {
+      history.push(JSON.stringify(tasks));
+      future = []; // Clear redo stack on new action
+      if (history.length > MAX_HISTORY) history.shift();
+    }
+
+    function undo() {
+      if (history.length > 1) {
+        future.push(history.pop());
+        tasks = JSON.parse(history[history.length - 1]);
+        saveTasks();
+        renderTasks();
+        showToast("Undo successful");
+      } else {
+        showToast("Nothing to undo", "bg-red-500");
+      }
+    }
+
+    function redo() {
+      if (future.length > 0) {
+        const nextState = future.pop();
+        history.push(nextState);
+        tasks = JSON.parse(nextState);
+        saveTasks();
+        renderTasks();
+        showToast("Redo successful");
+      } else {
+        showToast("Nothing to redo", "bg-red-500");
+      }
+    }
+
+    // Toast Notifications
+    function showToast(message, bgColor = "bg-green-500") {
+      const toast = document.createElement("div");
+      toast.className = `toast ${bgColor} text-white px-4 py-2 rounded shadow-lg`;
+      toast.textContent = message;
+      document.getElementById("toast-container").appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Initialize
+    saveSnapshot();
+
+    // DOM Elements
+    const taskForm = document.getElementById("task-form");
+    const taskList = document.getElementById("task-list");
+
+    function saveTasks() {
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    }
+
+    function renderTasks() {
+      taskList.innerHTML = "";
+      tasks.forEach(task => {
+        const li = document.createElement("li");
+        li.className = "task-item p-3 border border-gray-200 rounded flex justify-between items-center";
+        li.setAttribute("data-id", task.id);
+        li.setAttribute("draggable", "true");
+        
+        const priorityColors = {
+          high: "text-red-600 font-bold",
+          medium: "text-orange-500 font-bold",
+          low: "text-green-600 font-bold"
+        };
+
+        li.innerHTML = `
+          <div class="flex items-center gap-4">
+            <span class="name">${task.name}</span>
+            <span class="${priorityColors[task.priority]}">${task.priority}</span>
+            <span class="text-gray-500">Due: ${task.dueDate}</span>
+          </div>
+          <button 
+            class="delete-btn bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
+            data-id="${task.id}"
+          >
+            Delete
+          </button>
+        `;
+        taskList.appendChild(li);
+
+        li.addEventListener("dblclick", () => enableEditMode(li, task));
+      });
+
+      document.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const taskId = parseInt(e.target.getAttribute("data-id"));
+          const taskName = tasks.find(t => t.id === taskId)?.name || "Task";
+          tasks = tasks.filter(task => task.id !== taskId);
+          saveTasks();
+          renderTasks();
+          showToast(`Deleted: ${taskName}`, "bg-red-500");
+        });
+      });
+
+      setupDragAndDrop();
+      saveSnapshot(); // Save state after rendering
+    }
+
+    // Edit Task
+    function enableEditMode(li, task) {
+      li.classList.add("editing");
+      li.innerHTML = `
+        <div class="flex items-center gap-2 w-full">
+          <input 
+            class="edit-input p-1 border border-gray-300 rounded flex-1" 
+            value="${task.name}" 
+            data-field="name"
+          >
+          <select 
+            class="edit-input p-1 border border-gray-300 rounded" 
+            data-field="priority"
+          >
+            <option value="low" ${task.priority === "low" ? "selected" : ""}>Low</option>
+            <option value="medium" ${task.priority === "medium" ? "selected" : ""}>Medium</option>
+            <option value="high" ${task.priority === "high" ? "selected" : ""}>High</option>
+          </select>
+          <input 
+            type="date" 
+            class="edit-input p-1 border border-gray-300 rounded" 
+            value="${task.dueDate}" 
+            data-field="dueDate"
+          >
+          <button 
+            class="save-edit bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded"
+          >
+            Save
+          </button>
+        </div>
+      `;
+
+      li.querySelector(".save-edit").addEventListener("click", () => saveEdit(li, task));
+      li.querySelectorAll(".edit-input").forEach(input => {
+        input.addEventListener("keypress", (e) => {
+          if (e.key === "Enter") saveEdit(li, task);
+        });
+      });
+    }
+
+    function saveEdit(li, task) {
+      li.querySelectorAll(".edit-input").forEach(input => {
+        task[input.getAttribute("data-field")] = input.value;
+      });
+      saveTasks();
+      renderTasks();
+      showToast("Task updated");
+    }
+
+    // Drag-and-Drop
+    function setupDragAndDrop() {
+      let draggedItem = null;
+
+      document.querySelectorAll(".task-item").forEach(item => {
+        item.addEventListener("dragstart", () => {
+          draggedItem = item;
+          setTimeout(() => item.classList.add("dragging"), 0);
+        });
+
+        item.addEventListener("dragend", () => {
+          item.classList.remove("dragging");
+        });
+      });
+
+      taskList.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const afterElement = getDragAfterElement(taskList, e.clientY);
+        if (afterElement == null) {
+          taskList.appendChild(draggedItem);
+        } else {
+          taskList.insertBefore(draggedItem, afterElement);
+        }
+      });
+
+      taskList.addEventListener("drop", () => {
+        const newTasks = [];
+        document.querySelectorAll(".task-item").forEach(item => {
+          const id = parseInt(item.getAttribute("data-id"));
+          newTasks.push(tasks.find(t => t.id === id));
+        });
+        tasks = newTasks;
+        saveTasks();
+        showToast("Tasks reordered");
+      });
+    }
+
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll(".task-item:not(.dragging)")];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    // Event Listeners
+    taskForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const newTask = {
+        id: Date.now(),
+        name: document.getElementById("task-name").value,
+        priority: document.getElementById("task-priority").value,
+        dueDate: document.getElementById("task-due").value
+      };
+      tasks.push(newTask);
+      saveTasks();
+      renderTasks();
+      taskForm.reset();
+      showToast("Task added");
+    });
+
+    document.getElementById("sort-priority").addEventListener("click", () => {
+      const priorityOrder = { high: 3, medium: 2, low: 1 };
+      tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+      saveTasks();
+      renderTasks();
+      showToast("Sorted by priority");
+    });
+
+    document.getElementById("sort-date").addEventListener("click", () => {
+      tasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+      saveTasks();
+      renderTasks();
+      showToast("Sorted by date");
+    });
+
+    document.getElementById("sort-name").addEventListener("click", () => {
+      tasks.sort((a, b) => a.name.localeCompare(b.name));
+      saveTasks();
+      renderTasks();
+      showToast("Sorted by name");
+    });
+
+    document.getElementById("undo-btn").addEventListener("click", undo);
+    document.getElementById("redo-btn").addEventListener("click", redo);
+
+    // Initial render
+    renderTasks();
+  </script>
+</body>
+</html>
