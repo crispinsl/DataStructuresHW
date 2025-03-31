@@ -3,19 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Task Manager Pro</title>
+  <title>Task Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!--importing the tailwind CSS framework-->
+  <script src="script.js" type="text/javascript"></script>
   <style>
+    /* style for dragging tasks */
     .task-item.dragging {
       opacity: 0.5;
       background-color: #f3f4f6;
     }
+    /* style for editing task items */
     .task-item.editing {
       background-color: #fef9c3;
     }
+    /* style for toast notifications */
     .toast {
       animation: fadeInOut 3s ease-in-out forwards;
     }
+    /* keyframe animations for toast notifs */
     @keyframes fadeInOut {
       0%, 100% { opacity: 0; transform: translateY(20px); }
       10%, 90% { opacity: 1; transform: translateY(0); }
@@ -23,13 +29,13 @@
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4">
-  <!-- Toast Notification Container -->
+  <!--toast notification-->
   <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
 
   <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
     <h1 class="text-2xl font-bold text-center mb-6">Task Manager Pro</h1>
     
-    <!-- Task Form -->
+    <!--task form-->
     <form id="task-form" class="flex gap-2 mb-6 flex-wrap">
       <input 
         type="text" 
@@ -61,7 +67,7 @@
       </button>
     </form>
 
-    <!-- Action Buttons -->
+    <!--action buttons-->
     <div class="flex gap-2 mb-6 flex-wrap">
       <button id="sort-priority" class="action-btn bg-blue-600">
         Sort by Priority
@@ -80,10 +86,10 @@
       </button>
     </div>
 
-    <!-- Task List -->
+    <!--task list-->
     <ul id="task-list" class="space-y-2"></ul>
 
-    <!-- Empty State -->
+    <!--empty state-->
     <div id="empty-state" class="text-center py-8 text-gray-500 hidden">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -93,9 +99,9 @@
   </div>
 
   <script>
-    // ====================
+  
     // STATE MANAGEMENT
-    // ====================
+  
     const state = {
       tasks: JSON.parse(localStorage.getItem("tasks")) || [
         { id: 1, name: "Finish project", priority: "high", dueDate: "2023-12-01" },
@@ -107,9 +113,8 @@
       MAX_HISTORY: 20
     };
 
-    // ====================
     // CORE FUNCTIONS
-    // ====================
+    
     const saveTasks = () => {
       localStorage.setItem("tasks", JSON.stringify(state.tasks));
     };
@@ -145,9 +150,8 @@
       }
     };
 
-    // ====================
     // UI FUNCTIONS
-    // ====================
+
     const showToast = (message, bgColor = "bg-green-500") => {
       const toast = document.createElement("div");
       toast.className = `toast ${bgColor} text-white px-4 py-2 rounded shadow-lg flex items-center`;
@@ -201,7 +205,7 @@
         `;
         taskList.appendChild(taskItem);
 
-        // Edit on double-click
+        // EDIT ON DOUBLE CLICK
         taskItem.addEventListener("dblclick", () => enableEditMode(taskItem, task));
       });
 
@@ -215,9 +219,8 @@
       return new Date(dateString).toLocaleDateString(undefined, options);
     };
 
-    // ====================
     // TASK OPERATIONS
-    // ====================
+
     const enableEditMode = (li, task) => {
       li.classList.add("editing");
       li.innerHTML = `
@@ -280,9 +283,8 @@
       });
     };
 
-    // ====================
     // DRAG AND DROP
-    // ====================
+  
     const setupDragAndDrop = () => {
       let draggedItem = null;
 
@@ -334,11 +336,10 @@
       }, { offset: Number.NEGATIVE_INFINITY }).element;
     };
 
-    // ====================
     // EVENT LISTENERS
-    // ====================
+
     const setupEventListeners = () => {
-      // Delete buttons
+      // DELETE BUTTONS
       document.querySelectorAll(".delete-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
           const taskId = parseInt(e.target.getAttribute("data-id"));
@@ -351,7 +352,7 @@
       });
     };
 
-    // Form submission
+    // FORM SUBMISSION
     document.getElementById("task-form").addEventListener("submit", (e) => {
       e.preventDefault();
       const newTask = {
@@ -374,7 +375,7 @@
       showToast("Task added successfully");
     });
 
-    // Sorting
+    // SORTING
     document.getElementById("sort-priority").addEventListener("click", () => {
       const priorityOrder = { high: 3, medium: 2, low: 1 };
       state.tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
@@ -397,11 +398,11 @@
       showToast("Sorted by name");
     });
 
-    // Undo/Redo
+    // UNDO/REDO
     document.getElementById("undo-btn").addEventListener("click", undo);
     document.getElementById("redo-btn").addEventListener("click", redo);
 
-    // Keyboard shortcuts
+    // SHORTCUTS
     document.addEventListener("keydown", (e) => {
       if (e.ctrlKey && e.key === "z") {
         e.preventDefault();
@@ -413,10 +414,8 @@
       }
     });
 
-    // ====================
     // INITIALIZATION
-    // ====================
-    // Add button styling
+    
     const actionBtns = document.querySelectorAll(".action-btn");
     actionBtns.forEach(btn => {
       btn.classList.add(
@@ -431,7 +430,7 @@
       );
     });
 
-    // Initialize
+    // INITIALIZE
     saveSnapshot();
     renderTasks();
   </script>
