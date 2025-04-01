@@ -1,9 +1,10 @@
 const taskManager = {
   // state variables
   tasks: JSON.parse(localStorage.getItem("tasks")) || [
-    { id: 1, name: "Finish project", priority: "high", dueDate: "2023-12-01" },
-    { id: 2, name: "Buy groceries", priority: "medium", dueDate: "2023-11-25" },
-    { id: 3, name: "Call mom", priority: "low", dueDate: "2023-11-20" }
+    { id: 1, name: "Finish project", priority: "high", dueDate: "2025-1-01" },
+    { id: 2, name: "Buy groceries", priority: "medium", dueDate: "2025-1-5" },
+    { id: 3, name: "Call mom", priority: "low", dueDate: "2025-1-4" },
+    { id: 4, name: "Study", priority: "high", dueDate: "2025-1-2" }
   ],
   history: [],      
   future: [],       
@@ -322,7 +323,7 @@ const taskManager = {
   
   // attach all event listeners
   setupEventListeners() {
-    document.getElementById("task-form").addEventListener("submit", (e) => this.handleTaskSubmit(e));
+    document.getElementById("task-form").addEventListener("submit", (e) => this.handleTaskSubmit(e)); //FIGURE OUT ERROR: 'cannot read properties of null'
     
     document.getElementById("task-list").addEventListener("click", (e) => {
       if (e.target.classList.contains("delete-btn")) {
